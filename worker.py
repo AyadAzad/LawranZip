@@ -1,0 +1,145 @@
+import os
+import zipfile
+import tarfile
+import pyzipper
+import py7zr
+from PySide6.QtCore import QThread, Signal
+
+
+class WorkerThread(QThread):
+    progress = Signal(int)
+    finished = Signal(bool, str)
+    requires_password = Signal()
+
+    def __init__(self, operation, source, destination, password=None, files_to_add=None, files_to_extract=None):
+        super().__init__()
+        self.operation = operation
+        self.source = source
+        self.destination = destination
+        self.password = password
+        self.files_to_add = files_to_add or []
+        self.files_to_extract = files_to_extract or []
+
+    def run(self):
+        try:
+            if self.operation == 'extract':
+                self.extract_archive()
+            elif self.operation == 'create':
+                self.create_archive()
+            self.finished.emit(True, "Operation completed successfully")
+        except Exception as e:
+            error_msg = str(e)
+            if "password" in error_msg.lower() or "bad password" in error_msg.lower():
+                self.requires_password.emit()
+                self.finished.emit(False, "Password required or incorrect")
+            else:
+                self.finished.emit(False, f"Error: {error_msg}")
+
+    def extract_archive(self):
+        """Extract archive with proper error handling"""
+        ext = self.source.lower()
+
+        if ext.endswith('.zip'):
+            self._extract_zip()
+        elif ext.endswith(('.tar', '.tar.gz', '.tgz', '.tar.bz2', '.tbz2', '.tar.xz', '.txz')):
+            self._extract_tar()
+        elif ext.endswith('.7z'):
+            self._extract_7zip()
+        else:
+            raise Exception(f"Unsupported archive format for extraction: {ext}")
+
+    def _extract_zip(self):
+        """Extract ZIP archive"""
+        if self.password:
+            try:
+                with pyzipper.AESZipFile(self.source) as zf:
+                    zf.setpassword(self.password.encode('utf-8'))
+                    self._extract_files(zf)
+                return
+            except RuntimeError as e:
+                if "password" in str(e).lower():
+                    raise Exception("Incorrect password")
+                raise e
+
+        try:
+            with zipfile.ZipFile(self.source, 'r') as zf:
+                self._extract_files(zf)
+        except RuntimeError as e:
+            if "password" in str(e).lower() or "encrypted" in str(e).lower():
+                raise Exception("Password required")
+            raise e
+
+    def _extract_tar(self):
+        """Extract TAR archive"""
+        with tarfile.open(self.source, 'r:*') as tf:
+            self._extract_files(tf)
+
+    def _extract_7zip(self):
+        """Extract 7-Zip archive"""
+        with py7zr.SevenZipFile(self.source, 'r', password=self.password) as zf:
+            self._extract_files(zf)
+
+    def create_archive(self):
+        """Create archive"""
+        ext = self.destination.lower()
+
+        if ext.endswith('.zip'):
+            self._create_zip()
+        elif ext.endswith('.7z'):
+            self._create_7zip()
+        elif ext.endswith(('.tar', '.tar.gz', '.tgz')):
+            self._create_tar()
+        else:
+            raise Exception(f"Unsupported archive format for creation: {ext}")
+
+    def _create_zip(self):
+        """Create ZIP archive"""
+        if self.password:
+            with pyzipper.AESZipFile(
+                    self.destination,
+                    'w',
+                    compression=pyzipper.ZIP_DEFLATED,
+                    encryption=pyzipper.WZ_AES
+            ) as zf:
+                zf.setpassword(self.password.encode('utf-8'))
+                self._add_files_to_archive(zf)
+        else:
+            with zipfile.ZipFile(self.destination, 'w', zipfile.ZIP_DEFLATED) as zf:
+                self._add_files_to_archive(zf)
+
+    def _create_7zip(self):
+        """Create 7-Zip archive"""
+        with py7zr.SevenZipFile(self.destination, 'w', password=self.password) as zf:
+            self._add_files_to_archive(zf)
+
+    def _create_tar(self):
+        """Create TAR archive"""
+        mode = 'w:gz' if self.destination.lower().endswith(('.tar.gz', '.tgz')) else 'w'
+
+        with tarfile.open(self.destination, mode) as tf:
+            total = len(self.files_to_add)
+            for i, file_path in enumerate(self.files_to_add):
+                arcname = os.path.basename(file_path)
+                tf.add(file_path, arcname=arcname)
+                self.progress.emit(int(((i + 1) / total) * 100))
+
+    def _add_files_to_archive(self, archive_file):
+        total = len(self.files_to_add)
+        for i, file_path in enumerate(self.files_to_add):
+            arcname = os.path.basename(file_path)
+            if os.path.isfile(file_path):
+                archive_file.write(file_path, arcname)
+            elif os.path.isdir(file_path):
+                archive_file.writeall(file_path, arcname)
+            self.progress.emit(int(((i + 1) / total) * 100))
+
+    def _extract_files(self, archive_file):
+        if self.files_to_extract:
+            members = self.files_to_extract
+        else:
+            members = archive_file.getnames()
+
+        total = len(members)
+        for i, member in enumerate(members):
+            archive_file.extract(self.destination, member)
+            self.progress.emit(int(((i + 1) / total) * 100))
