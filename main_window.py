@@ -85,6 +85,7 @@ class MainWindow(QMainWindow):
         header.setSectionResizeMode(3, QHeaderView.ResizeMode.Interactive)
         self.file_tree.itemChanged.connect(self.handle_item_changed)
         self.file_tree.itemActivated.connect(self.handle_item_activated)
+        self.file_tree.itemSelectionChanged.connect(self.on_item_selection_changed)
 
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
@@ -260,29 +261,39 @@ class MainWindow(QMainWindow):
         self.start_compression_task('create', None, save_path, password, files_to_add=files_to_add)
 
     def extract_archive(self):
-        if self.current_archive:
-            extract_dialog = FileBrowserDialog(self, directory_only=True)
-            if extract_dialog.exec() == QDialog.DialogCode.Accepted:
-                extract_path_list = extract_dialog.get_selected_paths()
-                if not extract_path_list:
-                    return
-                extract_path = extract_path_list[0]
-                self.start_compression_task('extract', self.current_archive, extract_path)
+        archive_to_extract = self.current_archive
+        files_to_extract = None
+
+        if archive_to_extract:
+            files_to_extract = self.get_checked_items()
+            if not files_to_extract:
+                files_to_extract = None  # Worker treats None as all files
         else:
-            extensions = self.get_supported_read_extensions()
-            name_filters = f"All Supported Archives ({' '.join(['*.' + ext for ext in extensions])});;All Files (*)"
-            file_path, _ = QFileDialog.getOpenFileName(self, "Select Archive to Extract", "", name_filters)
+            selected_items = self.file_tree.selectedItems()
+            if len(selected_items) == 1:
+                item = selected_items[0]
+                path = item.data(0, Qt.ItemDataRole.UserRole)
+                if path and os.path.isfile(path) and any(path.lower().endswith(f'.{ext}') for ext in self.get_supported_read_extensions()):
+                    archive_to_extract = path
 
-            if not file_path:
-                return
-
-            extract_dialog = FileBrowserDialog(self, directory_only=True)
-            if extract_dialog.exec() == QDialog.DialogCode.Accepted:
-                extract_path_list = extract_dialog.get_selected_paths()
-                if not extract_path_list:
+            if not archive_to_extract:
+                extensions = self.get_supported_read_extensions()
+                name_filters = f"All Supported Archives ({' '.join(['*.' + ext for ext in extensions])});;All Files (*)"
+                file_path, _ = QFileDialog.getOpenFileName(self, "Select Archive to Extract", "", name_filters)
+                if not file_path:
                     return
-                extract_path = extract_path_list[0]
-                self.start_compression_task('extract', file_path, extract_path)
+                archive_to_extract = file_path
+
+        if not archive_to_extract:
+            return
+
+        extract_dialog = FileBrowserDialog(self, directory_only=True)
+        if extract_dialog.exec() == QDialog.DialogCode.Accepted:
+            extract_path_list = extract_dialog.get_selected_paths()
+            if not extract_path_list:
+                return
+            extract_path = extract_path_list[0]
+            self.start_compression_task('extract', archive_to_extract, extract_path, files_to_extract=files_to_extract)
 
     def format_size(self, size):
         if size is None or size == 0:
@@ -431,6 +442,17 @@ class MainWindow(QMainWindow):
             iterator += 1
         return checked_paths
 
+    def on_item_selection_changed(self):
+        if self.current_archive is None:
+            selected_items = self.file_tree.selectedItems()
+            can_extract = False
+            if len(selected_items) == 1:
+                item = selected_items[0]
+                path = item.data(0, Qt.ItemDataRole.UserRole)
+                if path and os.path.isfile(path) and any(path.lower().endswith(f'.{ext}') for ext in self.get_supported_read_extensions()):
+                    can_extract = True
+            self.extract_btn.setEnabled(can_extract)
+
     def handle_item_changed(self, item, column):
         if column == 0:
             self.file_tree.blockSignals(True)
@@ -460,8 +482,13 @@ class MainWindow(QMainWindow):
     def handle_item_activated(self, item, column):
         if self.current_archive is None:
             path = item.data(0, Qt.ItemDataRole.UserRole)
-            if path and os.path.isdir(path):
-                self.load_directory_contents(path)
+            if path:
+                if os.path.isdir(path):
+                    self.load_directory_contents(path)
+                elif os.path.isfile(path) and any(path.lower().endswith(f'.{ext}') for ext in self.get_supported_read_extensions()):
+                    self.current_archive = path
+                    self.location_bar.setText(path)
+                    self.load_archive_contents()
 
     def start_compression_task(self, operation, source, destination, password=None, files_to_add=None, files_to_extract=None):
         self.set_buttons_enabled(False)
@@ -482,7 +509,7 @@ class MainWindow(QMainWindow):
 
     @Slot(bool, str)
     def on_operation_finished(self, success, message):
-        if self.worker_thread and self.worker_thread.isRunning() and "password" in message.lower():
+        if not success and self.worker_thread and "password" in message.lower():
             return
 
         self.set_buttons_enabled(True)
@@ -506,10 +533,6 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def on_password_required(self):
-        if self.worker_thread and self.worker_thread.isRunning():
-            self.worker_thread.terminate()
-            self.worker_thread.wait()
-
         self.set_buttons_enabled(True)
         self.progress_bar.setVisible(False)
         self.status_label.setText("Ready")

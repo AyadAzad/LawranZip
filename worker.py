@@ -29,7 +29,7 @@ class WorkerThread(QThread):
             self.finished.emit(True, "Operation completed successfully")
         except Exception as e:
             error_msg = str(e)
-            if "password" in error_msg.lower() or "bad password" in error_msg.lower():
+            if "password" in error_msg.lower() or "bad password" in error_msg.lower() or "encrypted" in error_msg.lower():
                 self.requires_password.emit()
                 self.finished.emit(False, "Password required or incorrect")
             else:
@@ -54,16 +54,26 @@ class WorkerThread(QThread):
             try:
                 with pyzipper.AESZipFile(self.source) as zf:
                     zf.setpassword(self.password.encode('utf-8'))
-                    self._extract_files(zf)
+                    members = self.files_to_extract if self.files_to_extract else zf.namelist()
+                    total = len(members)
+                    for i, member in enumerate(members):
+                        zf.extract(member, self.destination)
+                        self.progress.emit(int(((i + 1) / total) * 100))
                 return
             except RuntimeError as e:
                 if "password" in str(e).lower():
                     raise Exception("Incorrect password")
                 raise e
+            except (pyzipper.zipfile.BadZipFile, zipfile.BadZipFile):
+                raise Exception("Incorrect password or corrupt file.")
 
         try:
             with zipfile.ZipFile(self.source, 'r') as zf:
-                self._extract_files(zf)
+                members = self.files_to_extract if self.files_to_extract else zf.namelist()
+                total = len(members)
+                for i, member in enumerate(members):
+                    zf.extract(member, self.destination)
+                    self.progress.emit(int(((i + 1) / total) * 100))
         except RuntimeError as e:
             if "password" in str(e).lower() or "encrypted" in str(e).lower():
                 raise Exception("Password required")
@@ -72,12 +82,29 @@ class WorkerThread(QThread):
     def _extract_tar(self):
         """Extract TAR archive"""
         with tarfile.open(self.source, 'r:*') as tf:
-            self._extract_files(tf)
+            members = self.files_to_extract if self.files_to_extract else tf.getnames()
+            total = len(members)
+            for i, member in enumerate(members):
+                tf.extract(member, self.destination)
+                self.progress.emit(int(((i + 1) / total) * 100))
 
     def _extract_7zip(self):
         """Extract 7-Zip archive"""
-        with py7zr.SevenZipFile(self.source, 'r', password=self.password) as zf:
-            self._extract_files(zf)
+        try:
+            with py7zr.SevenZipFile(self.source, 'r', password=self.password) as zf:
+                targets = self.files_to_extract if self.files_to_extract else None
+                if targets:
+                    zf.extract(path=self.destination, targets=targets)
+                else:
+                    zf.extractall(path=self.destination)
+                self.progress.emit(100)
+        except py7zr.exceptions.PasswordRequired:
+            raise Exception("Password required")
+        except py7zr.exceptions.Bad7zFile:
+            if not self.password:
+                raise Exception("Password required")
+            else:
+                raise Exception("Incorrect password or corrupt file")
 
     def create_archive(self):
         """Create archive"""
@@ -117,11 +144,7 @@ class WorkerThread(QThread):
         mode = 'w:gz' if self.destination.lower().endswith(('.tar.gz', '.tgz')) else 'w'
 
         with tarfile.open(self.destination, mode) as tf:
-            total = len(self.files_to_add)
-            for i, file_path in enumerate(self.files_to_add):
-                arcname = os.path.basename(file_path)
-                tf.add(file_path, arcname=arcname)
-                self.progress.emit(int(((i + 1) / total) * 100))
+            self._add_files_to_archive(tf)
 
     def _add_files_to_archive(self, archive_file):
         total = len(self.files_to_add)
@@ -130,16 +153,14 @@ class WorkerThread(QThread):
             if os.path.isfile(file_path):
                 archive_file.write(file_path, arcname)
             elif os.path.isdir(file_path):
-                archive_file.writeall(file_path, arcname)
-            self.progress.emit(int(((i + 1) / total) * 100))
+                if hasattr(archive_file, 'writeall'):
+                    archive_file.writeall(file_path, arcname)
+                else:
+                    base_dir = os.path.dirname(file_path) or '.'
+                    for dirpath, dirnames, filenames in os.walk(file_path):
+                        for filename in filenames:
+                            full_path = os.path.join(dirpath, filename)
+                            rel_path = os.path.join(arcname, os.path.relpath(full_path, file_path))
+                            archive_file.write(full_path, rel_path)
 
-    def _extract_files(self, archive_file):
-        if self.files_to_extract:
-            members = self.files_to_extract
-        else:
-            members = archive_file.getnames()
-
-        total = len(members)
-        for i, member in enumerate(members):
-            archive_file.extract(self.destination, member)
             self.progress.emit(int(((i + 1) / total) * 100))
