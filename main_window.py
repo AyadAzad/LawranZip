@@ -146,12 +146,14 @@ class MainWindow(QMainWindow):
         self.folder_icon = QIcon.fromTheme("folder", style.standardIcon(QStyle.StandardPixmap.SP_DirIcon))
         self.file_icon = QIcon.fromTheme("document-new", style.standardIcon(QStyle.StandardPixmap.SP_FileIcon))
 
-        icons_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets', 'icons')
+        assets_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets')
+        logo_path = os.path.join(assets_path, 'LawranZip.png')
+        self.setWindowIcon(QIcon(logo_path))
+
+        icons_path = os.path.join(assets_path, 'icons')
         self.zip_icon = QIcon(os.path.join(icons_path, 'zip.svg'))
         self.seven_zip_icon = QIcon(os.path.join(icons_path, '7zip.svg'))
         self.extract_icon = QIcon(os.path.join(icons_path, 'extract.svg'))
-
-        self.setWindowIcon(QIcon.fromTheme("application-x-archive", self.file_icon))
 
     def create_menu(self):
         menubar = self.menuBar()
