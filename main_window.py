@@ -14,6 +14,7 @@ from worker import WorkerThread
 from archive_viewer import ArchiveListThread
 from file_browser_dialog import FileBrowserDialog
 from theme import get_dark_theme_palette, get_light_theme_palette, get_aurora_theme_palette, get_stylesheet
+from progress_dialog import ProgressDialog
 
 
 class MainWindow(QMainWindow):
@@ -25,6 +26,7 @@ class MainWindow(QMainWindow):
         self.current_archive = None
         self.worker_thread = None
         self.list_thread = None
+        self.progress_dialog = None
         self.icon_provider = QFileIconProvider()
 
         self.init_ui()
@@ -494,23 +496,45 @@ class MainWindow(QMainWindow):
 
     def start_compression_task(self, operation, source, destination, password=None, files_to_add=None, files_to_extract=None):
         self.set_buttons_enabled(False)
-        self.progress_bar.setVisible(True)
-        self.progress_bar.setRange(0, 100)
-        self.progress_bar.setValue(0)
         self.status_label.setText("Processing...")
 
         self.worker_thread = WorkerThread(operation, source, destination, password, files_to_add, files_to_extract)
-        self.worker_thread.progress.connect(self.update_progress)
         self.worker_thread.finished.connect(self.on_operation_finished)
         self.worker_thread.requires_password.connect(self.on_password_required)
+
+        if operation == 'extract':
+            self.progress_dialog = ProgressDialog(self)
+            self.worker_thread.progress.connect(self.progress_dialog.update_progress)
+            self.worker_thread.file_changed.connect(self.progress_dialog.update_status)
+            self.progress_dialog.rejected.connect(self.cancel_operation)
+            self.progress_dialog.show()
+        else:
+            self.progress_bar.setVisible(True)
+            self.progress_bar.setRange(0, 100)
+            self.progress_bar.setValue(0)
+            self.worker_thread.progress.connect(self.update_progress)
+
         self.worker_thread.start()
+
+    @Slot()
+    def cancel_operation(self):
+        if self.worker_thread and self.worker_thread.isRunning():
+            self.worker_thread.terminate()
+            self.worker_thread.wait()
+            self.status_label.setText("Operation cancelled")
+            self.set_buttons_enabled(True)
 
     @Slot(int)
     def update_progress(self, value):
-        self.progress_bar.setValue(value)
+        if self.worker_thread.operation == 'create':
+            self.progress_bar.setValue(value)
 
     @Slot(bool, str)
     def on_operation_finished(self, success, message):
+        if self.progress_dialog:
+            self.progress_dialog.close()
+            self.progress_dialog = None
+
         if not success and self.worker_thread and "password" in message.lower():
             return
 
@@ -535,6 +559,10 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def on_password_required(self):
+        if self.progress_dialog:
+            self.progress_dialog.close()
+            self.progress_dialog = None
+
         self.set_buttons_enabled(True)
         self.progress_bar.setVisible(False)
         self.status_label.setText("Ready")

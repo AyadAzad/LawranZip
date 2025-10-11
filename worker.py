@@ -10,6 +10,7 @@ class WorkerThread(QThread):
     progress = Signal(int)
     finished = Signal(bool, str)
     requires_password = Signal()
+    file_changed = Signal(str)
 
     def __init__(self, operation, source, destination, password=None, files_to_add=None, files_to_extract=None):
         super().__init__()
@@ -57,6 +58,7 @@ class WorkerThread(QThread):
                     members = self.files_to_extract if self.files_to_extract else zf.namelist()
                     total = len(members)
                     for i, member in enumerate(members):
+                        self.file_changed.emit(f"Extracting: {member}")
                         zf.extract(member, self.destination)
                         self.progress.emit(int(((i + 1) / total) * 100))
                 return
@@ -72,6 +74,7 @@ class WorkerThread(QThread):
                 members = self.files_to_extract if self.files_to_extract else zf.namelist()
                 total = len(members)
                 for i, member in enumerate(members):
+                    self.file_changed.emit(f"Extracting: {member}")
                     zf.extract(member, self.destination)
                     self.progress.emit(int(((i + 1) / total) * 100))
         except RuntimeError as e:
@@ -85,6 +88,7 @@ class WorkerThread(QThread):
             members = self.files_to_extract if self.files_to_extract else tf.getnames()
             total = len(members)
             for i, member in enumerate(members):
+                self.file_changed.emit(f"Extracting: {member}")
                 tf.extract(member, self.destination)
                 self.progress.emit(int(((i + 1) / total) * 100))
 
@@ -92,12 +96,12 @@ class WorkerThread(QThread):
         """Extract 7-Zip archive"""
         try:
             with py7zr.SevenZipFile(self.source, 'r', password=self.password) as zf:
-                targets = self.files_to_extract if self.files_to_extract else None
-                if targets:
-                    zf.extract(path=self.destination, targets=targets)
-                else:
-                    zf.extractall(path=self.destination)
-                self.progress.emit(100)
+                targets = self.files_to_extract if self.files_to_extract else zf.getnames()
+                total = len(targets)
+                for i, member in enumerate(targets):
+                    self.file_changed.emit(f"Extracting: {member}")
+                    zf.extract(path=self.destination, targets=[member])
+                    self.progress.emit(int(((i + 1) / total) * 100))
         except py7zr.exceptions.PasswordRequired:
             raise Exception("Password required")
         except py7zr.exceptions.Bad7zFile:
