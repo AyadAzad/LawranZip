@@ -118,37 +118,49 @@ class WorkerThread(QThread):
             self._create_zip()
         elif ext.endswith('.7z'):
             self._create_7zip()
-        elif ext.endswith(('.tar', '.tar.gz', '.tgz')):
+        elif ext.endswith(('.tar', '.tar.gz', '.tgz', '.tar.xz')):
             self._create_tar()
         else:
             raise Exception(f"Unsupported archive format for creation: {ext}")
 
     def _create_zip(self):
         """Create ZIP archive"""
+        compression = zipfile.ZIP_LZMA
         if self.password:
             with pyzipper.AESZipFile(
                     self.destination,
                     'w',
-                    compression=pyzipper.ZIP_DEFLATED,
+                    compression=compression,
                     encryption=pyzipper.WZ_AES
             ) as zf:
                 zf.setpassword(self.password.encode('utf-8'))
                 self._add_files_to_archive(zf)
         else:
-            with zipfile.ZipFile(self.destination, 'w', zipfile.ZIP_DEFLATED) as zf:
+            with zipfile.ZipFile(self.destination, 'w', compression=compression) as zf:
                 self._add_files_to_archive(zf)
 
     def _create_7zip(self):
         """Create 7-Zip archive"""
-        with py7zr.SevenZipFile(self.destination, 'w', password=self.password) as zf:
+        filters = [{'id': py7zr.FILTER_LZMA2, 'preset': 9}]
+        with py7zr.SevenZipFile(self.destination, 'w', password=self.password, filters=filters) as zf:
             self._add_files_to_archive(zf)
 
     def _create_tar(self):
         """Create TAR archive"""
-        mode = 'w:gz' if self.destination.lower().endswith(('.tar.gz', '.tgz')) else 'w'
+        dest_lower = self.destination.lower()
+        if dest_lower.endswith('.tar.xz'):
+            mode = 'w:xz'
+        elif dest_lower.endswith(('.tar.gz', '.tgz')):
+            mode = 'w:gz'
+        else:
+            mode = 'w'
 
         with tarfile.open(self.destination, mode) as tf:
-            self._add_files_to_archive(tf)
+            total = len(self.files_to_add)
+            for i, file_path in enumerate(self.files_to_add):
+                arcname = os.path.basename(file_path)
+                tf.add(file_path, arcname=arcname)
+                self.progress.emit(int(((i + 1) / total) * 100))
 
     def _add_files_to_archive(self, archive_file):
         total = len(self.files_to_add)

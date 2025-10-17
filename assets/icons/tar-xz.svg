@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+    <path d="M40 12H8a2 2 0 0 0-2 2v20a2 2 0 0 0 2 2h32a2 2 0 0 0 2-2V14a2 2 0 0 0-2-2z" fill="#90CAF9"/>
+    <path d="M40 12H8a2 2 0 0 0-2 2v20a2 2 0 0 0 2 2h32a2 2 0 0 0 2-2V14a2 2 0 0 0-2-2z" fill="#64B5F6"/>
+    <path d="M40 14H8v-2h32v2z" fill="#E3F2FD"/>
+    <path d="M10 18h28v2H10zm0 4h28v2H10zm0 4h28v2H10zm0 4h28v2H10z" fill="#BBDEFB"/>
+    <text x="24" y="32" font-family="sans-serif" font-size="12" fill="#0D47A1" text-anchor="middle" font-weight="bold">XZ</text>
+</svg>

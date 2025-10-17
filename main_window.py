@@ -50,16 +50,21 @@ class MainWindow(QMainWindow):
         self.seven_zip_btn = QPushButton("7-Zip")
         self.seven_zip_btn.setIcon(self.seven_zip_icon)
         self.seven_zip_btn.setIconSize(icon_size)
+        self.tar_xz_btn = QPushButton("TAR.XZ")
+        self.tar_xz_btn.setIcon(self.tar_xz_icon)
+        self.tar_xz_btn.setIconSize(icon_size)
         self.extract_btn = QPushButton("Extract")
         self.extract_btn.setIcon(self.extract_icon)
         self.extract_btn.setIconSize(icon_size)
 
         self.zip_btn.clicked.connect(self.create_zip_archive)
         self.seven_zip_btn.clicked.connect(self.create_7zip_archive)
+        self.tar_xz_btn.clicked.connect(self.create_tar_xz_archive)
         self.extract_btn.clicked.connect(self.extract_archive)
 
         button_layout.addWidget(self.zip_btn)
         button_layout.addWidget(self.seven_zip_btn)
+        button_layout.addWidget(self.tar_xz_btn)
         button_layout.addWidget(self.extract_btn)
         button_layout.addStretch()
 
@@ -155,6 +160,7 @@ class MainWindow(QMainWindow):
         icons_path = os.path.join(assets_path, 'icons')
         self.zip_icon = QIcon(os.path.join(icons_path, 'zip.svg'))
         self.seven_zip_icon = QIcon(os.path.join(icons_path, '7zip.svg'))
+        self.tar_xz_icon = QIcon(os.path.join(icons_path, 'tar-xz.svg'))
         self.extract_icon = QIcon(os.path.join(icons_path, 'extract.svg'))
 
     def create_menu(self):
@@ -167,6 +173,9 @@ class MainWindow(QMainWindow):
         seven_zip_action = QAction(self.seven_zip_icon, "Create 7-Zip Archive", self)
         seven_zip_action.triggered.connect(self.create_7zip_archive)
         file_menu.addAction(seven_zip_action)
+        tar_xz_action = QAction(self.tar_xz_icon, "Create TAR.XZ Archive", self)
+        tar_xz_action.triggered.connect(self.create_tar_xz_archive)
+        file_menu.addAction(tar_xz_action)
         extract_action = QAction(self.extract_icon, "Extract Archive", self)
         extract_action.triggered.connect(self.extract_archive)
         file_menu.addAction(extract_action)
@@ -263,6 +272,22 @@ class MainWindow(QMainWindow):
                 return
 
         self.start_compression_task('create', None, save_path, password, files_to_add=files_to_add)
+
+    def create_tar_xz_archive(self):
+        files_to_add = self.get_checked_items()
+        if not files_to_add:
+            QMessageBox.warning(self, "No Files Selected", "Please select files or folders to add to the archive.")
+            return
+
+        save_path, _ = QFileDialog.getSaveFileName(self, "Save TAR.XZ Archive", "", "TAR.XZ Archive (*.tar.xz)")
+
+        if not save_path:
+            return
+
+        if not save_path.lower().endswith('.tar.xz'):
+            save_path += '.tar.xz'
+
+        self.start_compression_task('create', None, save_path, files_to_add=files_to_add)
 
     def extract_archive(self):
         archive_to_extract = self.current_archive
@@ -588,4 +613,5 @@ class MainWindow(QMainWindow):
     def set_buttons_enabled(self, enabled):
         self.zip_btn.setEnabled(enabled)
         self.seven_zip_btn.setEnabled(enabled)
+        self.tar_xz_btn.setEnabled(enabled)
         self.extract_btn.setEnabled(enabled)
