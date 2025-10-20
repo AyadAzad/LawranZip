@@ -18,10 +18,10 @@ from progress_dialog import ProgressDialog
 
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, translator):
         super().__init__()
-        self.setWindowTitle("LawranZip")
-        self.setGeometry(100, 100, 900, 700)
+        self.translator = translator
+        self.setGeometry(100, 100, 1100, 750)
 
         self.current_archive = None
         self.worker_thread = None
@@ -32,6 +32,7 @@ class MainWindow(QMainWindow):
         self.init_ui()
         self.create_menu()
         self.set_theme('aurora')
+        self.retranslate_ui()
 
     def init_ui(self):
         central_widget = QWidget()
@@ -44,16 +45,16 @@ class MainWindow(QMainWindow):
         button_layout = QHBoxLayout()
         icon_size = QSize(48, 48)
 
-        self.zip_btn = QPushButton("Zip")
+        self.zip_btn = QPushButton()
         self.zip_btn.setIcon(self.zip_icon)
         self.zip_btn.setIconSize(icon_size)
-        self.seven_zip_btn = QPushButton("7-Zip")
+        self.seven_zip_btn = QPushButton()
         self.seven_zip_btn.setIcon(self.seven_zip_icon)
         self.seven_zip_btn.setIconSize(icon_size)
-        self.tar_xz_btn = QPushButton("TAR.XZ")
+        self.tar_xz_btn = QPushButton()
         self.tar_xz_btn.setIcon(self.tar_xz_icon)
         self.tar_xz_btn.setIconSize(icon_size)
-        self.extract_btn = QPushButton("Extract")
+        self.extract_btn = QPushButton()
         self.extract_btn.setIcon(self.extract_icon)
         self.extract_btn.setIconSize(icon_size)
 
@@ -75,12 +76,12 @@ class MainWindow(QMainWindow):
         self.home_btn = QPushButton()
         self.home_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DirHomeIcon))
         self.home_btn.clicked.connect(self.load_desktop_directory)
-        location_label = QLabel("Location:")
+        self.location_label = QLabel()
         self.location_bar = QLineEdit()
         self.location_bar.returnPressed.connect(self.navigate_to_path)
         location_layout.addWidget(self.up_btn)
         location_layout.addWidget(self.home_btn)
-        location_layout.addWidget(location_label)
+        location_layout.addWidget(self.location_label)
         location_layout.addWidget(self.location_bar)
 
         self.file_tree = QTreeWidget()
@@ -97,7 +98,7 @@ class MainWindow(QMainWindow):
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
 
-        self.status_label = QLabel("Ready")
+        self.status_label = QLabel()
 
         main_layout.addLayout(button_layout)
         main_layout.addLayout(location_layout)
@@ -108,6 +109,28 @@ class MainWindow(QMainWindow):
         central_widget.setLayout(main_layout)
 
         self.load_desktop_directory()
+
+    def retranslate_ui(self):
+        self.setWindowTitle(self.translator.get('window_title'))
+        self.zip_btn.setText(self.translator.get('zip_button'))
+        self.seven_zip_btn.setText(self.translator.get('7zip_button'))
+        self.tar_xz_btn.setText(self.translator.get('tar_xz_button'))
+        self.extract_btn.setText(self.translator.get('extract_button'))
+        self.location_label.setText(self.translator.get('location_label'))
+        self.file_menu.setTitle(self.translator.get('file_menu'))
+        self.zip_action.setText(self.translator.get('create_zip_action'))
+        self.seven_zip_action.setText(self.translator.get('create_7zip_action'))
+        self.tar_xz_action.setText(self.translator.get('create_tar_xz_action'))
+        self.extract_action.setText(self.translator.get('extract_action'))
+        self.exit_action.setText(self.translator.get('exit_action'))
+        self.view_menu.setTitle(self.translator.get('view_menu'))
+        self.light_mode_action.setText(self.translator.get('light_mode_action'))
+        self.dark_mode_action.setText(self.translator.get('dark_mode_action'))
+        self.aurora_mode_action.setText(self.translator.get('aurora_mode_action'))
+        self.language_menu.setTitle(self.translator.get('language_menu'))
+        self.english_action.setText(self.translator.get('english_action'))
+        self.kurdish_action.setText(self.translator.get('kurdish_action'))
+        self.status_label.setText(self.translator.get('ready_status'))
 
     def get_desktop_path(self):
         if os.name == 'nt':
@@ -133,10 +156,10 @@ class MainWindow(QMainWindow):
                 self.current_archive = path
                 self.load_archive_contents()
             else:
-                QMessageBox.warning(self, "Unsupported File", "The selected file is not a supported archive format.")
+                QMessageBox.warning(self, self.translator.get('unsupported_file_title'), self.translator.get('unsupported_file_message'))
                 self.location_bar.setText(os.path.dirname(path))
         else:
-            QMessageBox.warning(self, "Invalid Path", "The specified path does not exist.")
+            QMessageBox.warning(self, self.translator.get('invalid_path_title'), self.translator.get('invalid_path_message'))
             self.load_desktop_directory()
 
     def navigate_up(self):
@@ -166,34 +189,46 @@ class MainWindow(QMainWindow):
     def create_menu(self):
         menubar = self.menuBar()
 
-        file_menu = menubar.addMenu("File")
-        zip_action = QAction(self.zip_icon, "Create ZIP Archive", self)
-        zip_action.triggered.connect(self.create_zip_archive)
-        file_menu.addAction(zip_action)
-        seven_zip_action = QAction(self.seven_zip_icon, "Create 7-Zip Archive", self)
-        seven_zip_action.triggered.connect(self.create_7zip_archive)
-        file_menu.addAction(seven_zip_action)
-        tar_xz_action = QAction(self.tar_xz_icon, "Create TAR.XZ Archive", self)
-        tar_xz_action.triggered.connect(self.create_tar_xz_archive)
-        file_menu.addAction(tar_xz_action)
-        extract_action = QAction(self.extract_icon, "Extract Archive", self)
-        extract_action.triggered.connect(self.extract_archive)
-        file_menu.addAction(extract_action)
-        file_menu.addSeparator()
-        exit_action = QAction("Exit", self)
-        exit_action.triggered.connect(self.close)
-        file_menu.addAction(exit_action)
+        self.file_menu = menubar.addMenu("")
+        self.zip_action = QAction(self.zip_icon, "", self)
+        self.zip_action.triggered.connect(self.create_zip_archive)
+        self.file_menu.addAction(self.zip_action)
+        self.seven_zip_action = QAction(self.seven_zip_icon, "", self)
+        self.seven_zip_action.triggered.connect(self.create_7zip_archive)
+        self.file_menu.addAction(self.seven_zip_action)
+        self.tar_xz_action = QAction(self.tar_xz_icon, "", self)
+        self.tar_xz_action.triggered.connect(self.create_tar_xz_archive)
+        self.file_menu.addAction(self.tar_xz_action)
+        self.extract_action = QAction(self.extract_icon, "", self)
+        self.extract_action.triggered.connect(self.extract_archive)
+        self.file_menu.addAction(self.extract_action)
+        self.file_menu.addSeparator()
+        self.exit_action = QAction("", self)
+        self.exit_action.triggered.connect(self.close)
+        self.file_menu.addAction(self.exit_action)
 
-        view_menu = menubar.addMenu("View")
-        light_mode_action = QAction("Light Mode", self)
-        light_mode_action.triggered.connect(lambda: self.set_theme('light'))
-        view_menu.addAction(light_mode_action)
-        dark_mode_action = QAction("Dark Mode", self)
-        dark_mode_action.triggered.connect(lambda: self.set_theme('dark'))
-        view_menu.addAction(dark_mode_action)
-        aurora_mode_action = QAction("Aurora Mode", self)
-        aurora_mode_action.triggered.connect(lambda: self.set_theme('aurora'))
-        view_menu.addAction(aurora_mode_action)
+        self.view_menu = menubar.addMenu("")
+        self.light_mode_action = QAction("", self)
+        self.light_mode_action.triggered.connect(lambda: self.set_theme('light'))
+        self.view_menu.addAction(self.light_mode_action)
+        self.dark_mode_action = QAction("", self)
+        self.dark_mode_action.triggered.connect(lambda: self.set_theme('dark'))
+        self.view_menu.addAction(self.dark_mode_action)
+        self.aurora_mode_action = QAction("", self)
+        self.aurora_mode_action.triggered.connect(lambda: self.set_theme('aurora'))
+        self.view_menu.addAction(self.aurora_mode_action)
+
+        self.language_menu = menubar.addMenu("")
+        self.english_action = QAction("", self)
+        self.english_action.triggered.connect(lambda: self.switch_language('en'))
+        self.language_menu.addAction(self.english_action)
+        self.kurdish_action = QAction("", self)
+        self.kurdish_action.triggered.connect(lambda: self.switch_language('ku'))
+        self.language_menu.addAction(self.kurdish_action)
+
+    def switch_language(self, language_code):
+        self.translator.load_language(language_code)
+        self.retranslate_ui()
 
     def set_theme(self, theme):
         app = QApplication.instance()
@@ -212,10 +247,10 @@ class MainWindow(QMainWindow):
     def create_zip_archive(self):
         files_to_add = self.get_checked_items()
         if not files_to_add:
-            QMessageBox.warning(self, "No Files Selected", "Please select files or folders to add to the archive.")
+            QMessageBox.warning(self, self.translator.get('no_files_selected_warning_title'), self.translator.get('no_files_selected_warning_message'))
             return
 
-        save_path, _ = QFileDialog.getSaveFileName(self, "Save ZIP Archive", "", "ZIP Archive (*.zip)")
+        save_path, _ = QFileDialog.getSaveFileName(self, self.translator.get('save_zip_dialog_title'), "", f"{self.translator.get('create_zip_action')} (*.zip)")
 
         if not save_path:
             return
@@ -224,18 +259,19 @@ class MainWindow(QMainWindow):
             save_path += '.zip'
 
         password = None
-        use_password = QMessageBox.question(
-            self, "Password Protection",
-            "Do you want to protect this archive with a password?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        ) == QMessageBox.StandardButton.Yes
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle(self.translator.get('password_protection_title'))
+        msg_box.setText(self.translator.get('password_protection_message'))
+        yes_button = msg_box.addButton(self.translator.get('yes'), QMessageBox.ButtonRole.YesRole)
+        no_button = msg_box.addButton(self.translator.get('no'), QMessageBox.ButtonRole.NoRole)
+        msg_box.exec()
 
-        if use_password:
+        if msg_box.clickedButton() == yes_button:
             password_dialog = PasswordDialog(self)
             if password_dialog.exec() == QDialog.DialogCode.Accepted:
                 password = password_dialog.get_password()
                 if not password:
-                    QMessageBox.warning(self, "Warning", "No password entered. Archive will not be encrypted.")
+                    QMessageBox.warning(self, self.translator.get('warning_title'), self.translator.get('no_password_warning'))
             else:
                 return
 
@@ -244,10 +280,10 @@ class MainWindow(QMainWindow):
     def create_7zip_archive(self):
         files_to_add = self.get_checked_items()
         if not files_to_add:
-            QMessageBox.warning(self, "No Files Selected", "Please select files or folders to add to the archive.")
+            QMessageBox.warning(self, self.translator.get('no_files_selected_warning_title'), self.translator.get('no_files_selected_warning_message'))
             return
 
-        save_path, _ = QFileDialog.getSaveFileName(self, "Save 7-Zip Archive", "", "7-Zip Archive (*.7z)")
+        save_path, _ = QFileDialog.getSaveFileName(self, self.translator.get('save_7zip_dialog_title'), "", f"{self.translator.get('create_7zip_action')} (*.7z)")
 
         if not save_path:
             return
@@ -256,18 +292,19 @@ class MainWindow(QMainWindow):
             save_path += '.7z'
 
         password = None
-        use_password = QMessageBox.question(
-            self, "Password Protection",
-            "Do you want to protect this archive with a password?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        ) == QMessageBox.StandardButton.Yes
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle(self.translator.get('password_protection_title'))
+        msg_box.setText(self.translator.get('password_protection_message'))
+        yes_button = msg_box.addButton(self.translator.get('yes'), QMessageBox.ButtonRole.YesRole)
+        no_button = msg_box.addButton(self.translator.get('no'), QMessageBox.ButtonRole.NoRole)
+        msg_box.exec()
 
-        if use_password:
+        if msg_box.clickedButton() == yes_button:
             password_dialog = PasswordDialog(self)
             if password_dialog.exec() == QDialog.DialogCode.Accepted:
                 password = password_dialog.get_password()
                 if not password:
-                    QMessageBox.warning(self, "Warning", "No password entered. Archive will not be encrypted.")
+                    QMessageBox.warning(self, self.translator.get('warning_title'), self.translator.get('no_password_warning'))
             else:
                 return
 
@@ -276,10 +313,10 @@ class MainWindow(QMainWindow):
     def create_tar_xz_archive(self):
         files_to_add = self.get_checked_items()
         if not files_to_add:
-            QMessageBox.warning(self, "No Files Selected", "Please select files or folders to add to the archive.")
+            QMessageBox.warning(self, self.translator.get('no_files_selected_warning_title'), self.translator.get('no_files_selected_warning_message'))
             return
 
-        save_path, _ = QFileDialog.getSaveFileName(self, "Save TAR.XZ Archive", "", "TAR.XZ Archive (*.tar.xz)")
+        save_path, _ = QFileDialog.getSaveFileName(self, self.translator.get('save_tar_xz_dialog_title'), "", f"{self.translator.get('create_tar_xz_action')} (*.tar.xz)")
 
         if not save_path:
             return
@@ -308,7 +345,7 @@ class MainWindow(QMainWindow):
             if not archive_to_extract:
                 extensions = self.get_supported_read_extensions()
                 name_filters = f"All Supported Archives ({' '.join(['*.' + ext for ext in extensions])});;All Files (*)"
-                file_path, _ = QFileDialog.getOpenFileName(self, "Select Archive to Extract", "", name_filters)
+                file_path, _ = QFileDialog.getOpenFileName(self, self.translator.get('select_archive_to_extract_dialog_title'), "", name_filters)
                 if not file_path:
                     return
                 archive_to_extract = file_path
@@ -344,7 +381,7 @@ class MainWindow(QMainWindow):
         self.location_bar.setText(directory_path)
         self.current_archive = None
         self.extract_btn.setEnabled(False)
-        self.status_label.setText(f"Viewing: {directory_path}")
+        self.status_label.setText(f"{self.translator.get('viewing_path_status')}: {directory_path}")
 
         try:
             dirs, files = [], []
@@ -376,14 +413,14 @@ class MainWindow(QMainWindow):
                 self.file_tree.addTopLevelItem(item)
 
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Could not read directory '{directory_path}':\n{e}")
+            QMessageBox.critical(self, self.translator.get('error_title'), self.translator.get('read_directory_error', directory_path=directory_path, e=e))
 
     def load_archive_contents(self, password=None):
         if not self.current_archive:
             return
 
         self.file_tree.clear()
-        self.status_label.setText("Reading archive...")
+        self.status_label.setText(self.translator.get('reading_archive_status'))
         self.set_buttons_enabled(False)
         self.progress_bar.setVisible(True)
         self.progress_bar.setRange(0, 0)
@@ -400,12 +437,12 @@ class MainWindow(QMainWindow):
 
         if success:
             self.populate_tree(file_list)
-            self.status_label.setText(f"Archive loaded: {len(file_list)} items")
+            self.status_label.setText(self.translator.get('archive_loaded_status', item_count=len(file_list)))
             self.extract_btn.setEnabled(True)
         else:
             if "Password required" not in error_message:
-                QMessageBox.critical(self, "Error", error_message)
-                self.status_label.setText("Failed to load archive")
+                QMessageBox.critical(self, self.translator.get('error_title'), error_message)
+                self.status_label.setText(self.translator.get('failed_to_load_archive_status'))
                 self.current_archive = None
                 self.location_bar.clear()
 
@@ -417,12 +454,12 @@ class MainWindow(QMainWindow):
             if password:
                 self.load_archive_contents(password)
             else:
-                QMessageBox.warning(self, "No Password", "Password is required to open this archive.")
-                self.status_label.setText("Operation cancelled")
+                QMessageBox.warning(self, self.translator.get('no_password_warning'), self.translator.get('no_password_required_warning'))
+                self.status_label.setText(self.translator.get('operation_cancelled_status'))
                 self.current_archive = None
                 self.location_bar.clear()
         else:
-            self.status_label.setText("Operation cancelled")
+            self.status_label.setText(self.translator.get('operation_cancelled_status'))
             self.current_archive = None
             self.location_bar.clear()
 
@@ -521,7 +558,7 @@ class MainWindow(QMainWindow):
 
     def start_compression_task(self, operation, source, destination, password=None, files_to_add=None, files_to_extract=None):
         self.set_buttons_enabled(False)
-        self.status_label.setText("Processing...")
+        self.status_label.setText(self.translator.get('processing_status'))
 
         self.worker_thread = WorkerThread(operation, source, destination, password, files_to_add, files_to_extract)
         self.worker_thread.finished.connect(self.on_operation_finished)
@@ -546,7 +583,7 @@ class MainWindow(QMainWindow):
         if self.worker_thread and self.worker_thread.isRunning():
             self.worker_thread.terminate()
             self.worker_thread.wait()
-            self.status_label.setText("Operation cancelled")
+            self.status_label.setText(self.translator.get('operation_cancelled_status'))
             self.set_buttons_enabled(True)
 
     @Slot(int)
@@ -567,8 +604,8 @@ class MainWindow(QMainWindow):
         self.progress_bar.setVisible(False)
 
         if success:
-            self.status_label.setText("Operation completed successfully!")
-            QMessageBox.information(self, "Success", "Operation completed successfully!")
+            self.status_label.setText(self.translator.get('operation_completed_success_message'))
+            QMessageBox.information(self, self.translator.get('operation_completed_success_message'), self.translator.get('operation_completed_success_message'))
 
             if self.worker_thread.operation == 'create':
                 self.current_archive = self.worker_thread.destination
@@ -579,8 +616,8 @@ class MainWindow(QMainWindow):
 
         else:
             if "password" not in message.lower():
-                self.status_label.setText(f"Error: {message}")
-                QMessageBox.critical(self, "Error", f"Operation failed: {message}")
+                self.status_label.setText(self.translator.get('operation_failed_error_message', message=message))
+                QMessageBox.critical(self, self.translator.get('error_title'), self.translator.get('operation_failed_error_message', message=message))
 
     @Slot()
     def on_password_required(self):
@@ -590,7 +627,7 @@ class MainWindow(QMainWindow):
 
         self.set_buttons_enabled(True)
         self.progress_bar.setVisible(False)
-        self.status_label.setText("Ready")
+        self.status_label.setText(self.translator.get('ready_status'))
 
         password_dialog = PasswordDialog(self)
         if password_dialog.exec() == QDialog.DialogCode.Accepted:
@@ -605,10 +642,10 @@ class MainWindow(QMainWindow):
                     self.worker_thread.files_to_extract
                 )
             else:
-                QMessageBox.warning(self, "Error", "A password was not provided.")
-                self.status_label.setText("Operation cancelled")
+                QMessageBox.warning(self, self.translator.get('error_title'), self.translator.get('password_not_provided_error'))
+                self.status_label.setText(self.translator.get('operation_cancelled_status'))
         else:
-            self.status_label.setText("Operation cancelled")
+            self.status_label.setText(self.translator.get('operation_cancelled_status'))
 
     def set_buttons_enabled(self, enabled):
         self.zip_btn.setEnabled(enabled)
