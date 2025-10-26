@@ -88,7 +88,7 @@ class WorkerThread(QThread):
             members = self.files_to_extract if self.files_to_extract else tf.getnames()
             total = len(members)
             for i, member in enumerate(members):
-                self.file_changed.emit(f"Extracting: {member}")
+                self.file_changed.emit(f"Extracting: {member.name}")
                 tf.extract(member, self.destination)
                 self.progress.emit(int(((i + 1) / total) * 100))
 
@@ -159,6 +159,7 @@ class WorkerThread(QThread):
             total = len(self.files_to_add)
             for i, file_path in enumerate(self.files_to_add):
                 arcname = os.path.basename(file_path)
+                self.file_changed.emit(f"Compressing: {arcname}")
                 tf.add(file_path, arcname=arcname)
                 self.progress.emit(int(((i + 1) / total) * 100))
 
@@ -166,6 +167,7 @@ class WorkerThread(QThread):
         total = len(self.files_to_add)
         for i, file_path in enumerate(self.files_to_add):
             arcname = os.path.basename(file_path)
+            self.file_changed.emit(f"Compressing: {arcname}")
             if os.path.isfile(file_path):
                 archive_file.write(file_path, arcname)
             elif os.path.isdir(file_path):

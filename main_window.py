@@ -558,25 +558,24 @@ class MainWindow(QMainWindow):
 
     def start_compression_task(self, operation, source, destination, password=None, files_to_add=None, files_to_extract=None):
         self.set_buttons_enabled(False)
-        self.status_label.setText(self.translator.get('processing_status'))
+
+        title = ""
+        if operation == 'extract':
+            title = self.translator.get('extract_button')
+        elif operation == 'create':
+            title = self.translator.get('zip_button') # Or other archive types
+
+        self.progress_dialog = ProgressDialog(title, self)
+        self.progress_dialog.rejected.connect(self.cancel_operation)
 
         self.worker_thread = WorkerThread(operation, source, destination, password, files_to_add, files_to_extract)
+        self.worker_thread.progress.connect(self.progress_dialog.update_progress)
+        self.worker_thread.file_changed.connect(self.progress_dialog.update_status)
         self.worker_thread.finished.connect(self.on_operation_finished)
         self.worker_thread.requires_password.connect(self.on_password_required)
 
-        if operation == 'extract':
-            self.progress_dialog = ProgressDialog(self)
-            self.worker_thread.progress.connect(self.progress_dialog.update_progress)
-            self.worker_thread.file_changed.connect(self.progress_dialog.update_status)
-            self.progress_dialog.rejected.connect(self.cancel_operation)
-            self.progress_dialog.show()
-        else:
-            self.progress_bar.setVisible(True)
-            self.progress_bar.setRange(0, 100)
-            self.progress_bar.setValue(0)
-            self.worker_thread.progress.connect(self.update_progress)
-
         self.worker_thread.start()
+        self.progress_dialog.show()
 
     @Slot()
     def cancel_operation(self):
@@ -588,8 +587,8 @@ class MainWindow(QMainWindow):
 
     @Slot(int)
     def update_progress(self, value):
-        if self.worker_thread.operation == 'create':
-            self.progress_bar.setValue(value)
+        if self.progress_dialog:
+            self.progress_dialog.update_progress(value)
 
     @Slot(bool, str)
     def on_operation_finished(self, success, message):
@@ -601,7 +600,6 @@ class MainWindow(QMainWindow):
             return
 
         self.set_buttons_enabled(True)
-        self.progress_bar.setVisible(False)
 
         if success:
             self.status_label.setText(self.translator.get('operation_completed_success_message'))
@@ -626,7 +624,6 @@ class MainWindow(QMainWindow):
             self.progress_dialog = None
 
         self.set_buttons_enabled(True)
-        self.progress_bar.setVisible(False)
         self.status_label.setText(self.translator.get('ready_status'))
 
         password_dialog = PasswordDialog(self)

@@ -2,9 +2,9 @@ from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QProgressBar, QPushB
 from PySide6.QtCore import Slot
 
 class ProgressDialog(QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, title, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Extraction Progress")
+        self.setWindowTitle(title)
         self.setModal(True)
         self.setFixedSize(400, 150)
 
@@ -13,7 +13,7 @@ class ProgressDialog(QDialog):
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
 
-        self.status_label = QLabel("Starting extraction...")
+        self.status_label = QLabel("Starting...")
 
         self.cancel_button = QPushButton("Cancel")
         self.cancel_button.clicked.connect(self.reject)
