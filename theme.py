@@ -1,7 +1,7 @@
 from PySide6.QtGui import QPalette, QColor
 
 #
-# Legendary Themes v3 by Lawran
+# Legendary Themes v4 by Lawran
 #
 
 def get_dark_theme_palette():
@@ -39,7 +39,6 @@ def get_light_theme_palette():
     palette.setColor(QPalette.ColorRole.Highlight, QColor("#2980b9"))
     palette.setColor(QPalette.ColorRole.HighlightedText, QColor("#ffffff"))
     return palette
-
 
 def get_aurora_theme_palette():
     """Returns the palette for the new aurora theme."""
@@ -85,7 +84,7 @@ def get_base_stylesheet():
         /* Tree Widget */
         QTreeWidget {
             background-color: %BASE_BG%;
-            border: 1px solid %BORDER_COLOR%;
+            border: none; /* Removed border for a cleaner look */
             border-radius: 4px;
             padding: 5px;
         }
@@ -156,28 +155,39 @@ def get_base_stylesheet():
         /* Menu */
         QMenuBar {
             background-color: %WINDOW_BG%;
-            border-bottom: 1px solid %BORDER_COLOR%;
+            padding: 8px;
+            font-weight: 600;
         }
         QMenuBar::item {
             background: transparent;
-            padding: 6px 12px;
+            padding: 8px 12px;
+            border-radius: 4px;
         }
         QMenuBar::item:selected {
-            background: %ALTERNATE_BG%;
-            border-radius: 4px;
+            background-color: %ALTERNATE_BG%;
+        }
+        QMenuBar::item:pressed {
+            background-color: %HIGHLIGHT_COLOR%;
+            color: %HIGHLIGHTED_TEXT%;
         }
         QMenu {
             background-color: %BASE_BG%;
             border: 1px solid %BORDER_COLOR%;
-            padding: 5px;
+            padding: 8px;
+            border-radius: 4px;
         }
         QMenu::item {
-            padding: 6px 24px;
+            padding: 8px 24px;
             border-radius: 4px;
         }
         QMenu::item:selected {
             background-color: %HIGHLIGHT_COLOR%;
             color: %HIGHLIGHTED_TEXT%;
+        }
+        QMenu::separator {
+            height: 1px;
+            background-color: %BORDER_COLOR%;
+            margin: 4px 0;
         }
         /* Scrollbar */
         QScrollBar:vertical {
