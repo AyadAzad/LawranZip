@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (
     QMessageBox, QProgressBar, QHeaderView, QDialog,
     QLineEdit, QStyle, QFileIconProvider, QTreeWidgetItemIterator
 )
-from PySide6.QtCore import Slot, Qt, QSize, QFileInfo
+from PySide6.QtCore import Slot, Qt, QSize, QFileInfo, Signal
 from PySide6.QtGui import QAction, QIcon
 
 from password_dialog import PasswordDialog
@@ -18,6 +18,8 @@ from progress_dialog import ProgressDialog
 
 
 class MainWindow(QMainWindow):
+    command_line_finished = Signal()
+
     def __init__(self, translator):
         super().__init__()
         self.translator = translator
@@ -28,6 +30,7 @@ class MainWindow(QMainWindow):
         self.list_thread = None
         self.progress_dialog = None
         self.icon_provider = QFileIconProvider()
+        self._is_command_line = False
 
         self.init_ui()
         self.create_menu()
@@ -565,7 +568,7 @@ class MainWindow(QMainWindow):
         elif operation == 'create':
             title = self.translator.get('zip_button') # Or other archive types
 
-        self.progress_dialog = ProgressDialog(title, self)
+        self.progress_dialog = ProgressDialog(title, self if not self._is_command_line else None)
         self.progress_dialog.rejected.connect(self.cancel_operation)
 
         self.worker_thread = WorkerThread(operation, source, destination, password, files_to_add, files_to_extract)
@@ -584,6 +587,8 @@ class MainWindow(QMainWindow):
             self.worker_thread.wait()
             self.status_label.setText(self.translator.get('operation_cancelled_status'))
             self.set_buttons_enabled(True)
+        if self._is_command_line:
+            self.command_line_finished.emit()
 
     @Slot(int)
     def update_progress(self, value):
@@ -603,19 +608,26 @@ class MainWindow(QMainWindow):
 
         if success:
             self.status_label.setText(self.translator.get('operation_completed_success_message'))
-            QMessageBox.information(self, self.translator.get('operation_completed_success_message'), self.translator.get('operation_completed_success_message'))
+            if not self._is_command_line:
+                QMessageBox.information(self, self.translator.get('operation_completed_success_message'), self.translator.get('operation_completed_success_message'))
 
             if self.worker_thread.operation == 'create':
                 self.current_archive = self.worker_thread.destination
-                self.location_bar.setText(self.current_archive)
-                self.load_archive_contents()
+                if not self._is_command_line:
+                    self.location_bar.setText(self.current_archive)
+                    self.load_archive_contents()
             elif self.worker_thread.operation == 'extract':
-                self.load_directory_contents(self.worker_thread.destination)
+                if not self._is_command_line:
+                    self.load_directory_contents(self.worker_thread.destination)
 
         else:
             if "password" not in message.lower():
                 self.status_label.setText(self.translator.get('operation_failed_error_message', message=message))
-                QMessageBox.critical(self, self.translator.get('error_title'), self.translator.get('operation_failed_error_message', message=message))
+                if not self._is_command_line:
+                    QMessageBox.critical(self, self.translator.get('error_title'), self.translator.get('operation_failed_error_message', message=message))
+        
+        if self._is_command_line:
+            self.command_line_finished.emit()
 
     @Slot()
     def on_password_required(self):
@@ -626,7 +638,7 @@ class MainWindow(QMainWindow):
         self.set_buttons_enabled(True)
         self.status_label.setText(self.translator.get('ready_status'))
 
-        password_dialog = PasswordDialog(self)
+        password_dialog = PasswordDialog(self if not self._is_command_line else None)
         if password_dialog.exec() == QDialog.DialogCode.Accepted:
             password = password_dialog.get_password()
             if password:
@@ -639,13 +651,95 @@ class MainWindow(QMainWindow):
                     self.worker_thread.files_to_extract
                 )
             else:
-                QMessageBox.warning(self, self.translator.get('error_title'), self.translator.get('password_not_provided_error'))
+                QMessageBox.warning(self if not self._is_command_line else None, self.translator.get('error_title'), self.translator.get('password_not_provided_error'))
                 self.status_label.setText(self.translator.get('operation_cancelled_status'))
         else:
             self.status_label.setText(self.translator.get('operation_cancelled_status'))
+        
+        if self._is_command_line:
+            self.command_line_finished.emit()
 
     def set_buttons_enabled(self, enabled):
         self.zip_btn.setEnabled(enabled)
         self.seven_zip_btn.setEnabled(enabled)
         self.tar_xz_btn.setEnabled(enabled)
         self.extract_btn.setEnabled(enabled)
+
+    def handle_command_line_arguments(self, args):
+        if len(args) < 3:
+            self.command_line_finished.emit()
+            return
+
+        action = args[1]
+        file_path = args[2]
+
+        if not os.path.exists(file_path):
+            if not self._is_command_line:
+                QMessageBox.critical(self, self.translator.get('error_title'), self.translator.get('file_not_found_error', file_path=file_path))
+            self.command_line_finished.emit()
+            return
+
+        if action == "extract_here":
+            self.handle_extract_here(file_path)
+        elif action == "extract_to":
+            self.handle_extract_to(file_path)
+        elif action == "create_7zip":
+            self.handle_create_archive(file_path, ".7z")
+        elif action == "create_rar":
+            self.handle_create_archive(file_path, ".zip") # RAR creation is not supported, create zip instead
+
+    def handle_extract_here(self, file_path):
+        extract_path = os.path.dirname(file_path)
+        self.start_compression_task('extract', file_path, extract_path)
+
+    def handle_extract_to(self, file_path):
+        extract_dialog = FileBrowserDialog(self if not self._is_command_line else None, directory_only=True)
+        if extract_dialog.exec() == QDialog.DialogCode.Accepted:
+            extract_path_list = extract_dialog.get_selected_paths()
+            if not extract_path_list:
+                self.command_line_finished.emit()
+                return
+            extract_path = extract_path_list[0]
+            self.start_compression_task('extract', file_path, extract_path)
+        else:
+            self.command_line_finished.emit()
+
+    def handle_create_archive(self, file_path, extension):
+        save_path = os.path.splitext(file_path)[0] + extension
+        success, password = self.get_password_for_creation()
+        if success:
+            self.start_compression_task('create', None, save_path, password, files_to_add=[file_path])
+        else:
+            self.command_line_finished.emit()
+
+    def get_password_for_creation(self):
+        password = None
+        msg_box = QMessageBox(self if not self._is_command_line else None)
+        msg_box.setWindowTitle(self.translator.get('password_protection_title'))
+        msg_box.setText(self.translator.get('password_protection_message'))
+        yes_button = msg_box.addButton(self.translator.get('yes'), QMessageBox.ButtonRole.YesRole)
+        no_button = msg_box.addButton(self.translator.get('no'), QMessageBox.ButtonRole.NoRole)
+        msg_box.exec()
+
+        if msg_box.clickedButton() == yes_button:
+            password_dialog = PasswordDialog(self if not self._is_command_line else None)
+            if password_dialog.exec() == QDialog.DialogCode.Accepted:
+                password = password_dialog.get_password()
+                if not password:
+                    QMessageBox.warning(self if not self._is_command_line else None, self.translator.get('warning_title'), self.translator.get('no_password_warning'))
+                return True, password
+            else:
+                return False, None # User cancelled password dialog
+        elif msg_box.clickedButton() == no_button:
+            return True, None # User chose no password
+        
+        return False, None # User cancelled message box
+
+    def open_archive_from_path(self, file_path):
+        if os.path.isfile(file_path) and any(file_path.lower().endswith(f'.{ext}') for ext in self.get_supported_read_extensions()):
+            self.current_archive = file_path
+            self.location_bar.setText(file_path)
+            self.load_archive_contents()
+        else:
+            QMessageBox.warning(self, self.translator.get('unsupported_file_title'), self.translator.get('unsupported_file_message'))
+            self.load_desktop_directory()

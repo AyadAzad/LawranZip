@@ -1,0 +1,4 @@
+PySide6
+pyzipper
+py7zr
+rarfile
